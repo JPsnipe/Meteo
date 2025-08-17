@@ -13,4 +13,6 @@ This repository maintains a log of tasks performed by AI agents.
 - Improve column detection and validation to handle missing `time` fields.
 - Add sample dataset and prevent division by zero in spectral calculations.
 - Remove sample XLSX dataset and document local data setup.
+- Harden column mapping by normalizing headers and validating the time field.
+- Guard analyses against missing wind columns.
 
