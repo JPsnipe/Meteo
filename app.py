@@ -13,25 +13,34 @@ from sklearn.cluster import KMeans
 # Utility functions
 # ---------------------------------------------
 COL_PATTERNS = {
-    'time': r'(?i)^(fecha|fechahora|datetime|time|timestamp)$',
-    'tws': r'(?i)^(velocidad\s*media|tws|vel|speed)$',
-    'twd': r'(?i)^(dir|twd|direction)$',
-    'gust': r'(?i)^(velocidad\s*max|gust|racha)$'
+    'time': r'^(fecha|fechahora|datetime|time|timestamp)$',
+    'tws': r'^(velocidadmedia|tws|vel|speed)$',
+    'twd': r'^(dir|twd|direction)$',
+    'gust': r'^(velocidadmax|gust|racha)$'
 }
 
-def load_csv(file, sep, decimal):
-    return pd.read_csv(file, sep=sep, decimal=decimal)
+def load_file(file, sep, decimal):
+    if file.name.lower().endswith('.xlsx'):
+        df = pd.read_excel(file, decimal=decimal)
+    else:
+        df = pd.read_csv(file, sep=sep, decimal=decimal)
+    df.columns = df.columns.str.strip()
+    return df
 
 def detect_columns(df):
     mapping = {}
     for col in df.columns:
+        norm = re.sub(r'[^a-z0-9]', '', col.lower())
         for key, pat in COL_PATTERNS.items():
-            if re.match(pat, col):
+            if re.match(pat, norm):
                 mapping[key] = col
     return mapping
 
 def standardize(df, mapping, tz_str, resample_min=1):
-    df = df.rename(columns={v: k for k, v in mapping.items()})
+    rename_map = {v: k for k, v in mapping.items() if v in df.columns}
+    df = df.rename(columns=rename_map)
+    if 'time' not in df.columns:
+        raise KeyError("Missing 'time' column after mapping")
     dt = pd.to_datetime(df['time'], errors='coerce')
     dt = dt.dt.tz_localize(tz_str, nonexistent='shift_forward', ambiguous='NaT')
     df.index = dt
@@ -154,7 +163,7 @@ if 'datasets' not in st.session_state:
 
 sidebar = st.sidebar
 sidebar.header("Carga de datos")
-files = sidebar.file_uploader("Arrastra CSV(s)", type=['csv'], accept_multiple_files=True)
+files = sidebar.file_uploader("Arrastra CSV/XLSX", type=['csv', 'xlsx'], accept_multiple_files=True)
 sep = sidebar.text_input('Separador', value=';')
 decimal = sidebar.text_input('Decimal', value=',')
 tz_str = sidebar.text_input('Zona horaria', value='Europe/Madrid')
@@ -162,7 +171,7 @@ resample_min = sidebar.number_input('Resample (min)', 1, 60, 1)
 
 if files:
     for f in files:
-        df = load_csv(f, sep, decimal)
+        df = load_file(f, sep, decimal)
         mapping = detect_columns(df)
         with sidebar.expander(f"Mapeo columnas {f.name}"):
             for key in ['time','tws','twd','gust']:
