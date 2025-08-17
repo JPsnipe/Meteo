@@ -7,6 +7,7 @@ from scipy.signal import butter, filtfilt, welch, csd, coherence, hilbert
 import pywt
 import io
 import re
+import unicodedata
 from sklearn.cluster import KMeans
 
 # ---------------------------------------------
@@ -21,29 +22,41 @@ COL_PATTERNS = {
 
 def load_file(file, sep, decimal):
     if file.name.lower().endswith('.xlsx'):
-
         df = pd.read_excel(file, decimal=decimal)
     else:
         df = pd.read_csv(file, sep=sep, decimal=decimal)
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.replace('\ufeff', '', regex=False).str.strip()
     return df
+
+
+def _normalize(col):
+    col = unicodedata.normalize('NFKD', col)
+    col = ''.join(c for c in col if not unicodedata.combining(c))
+    return re.sub(r'[^a-z0-9]', '', col.lower())
 
 
 def detect_columns(df):
     mapping = {}
     for col in df.columns:
-        norm = re.sub(r'[^a-z0-9]', '', col.lower())
+        norm = _normalize(col)
         for key, pat in COL_PATTERNS.items():
             if re.match(pat, norm):
                 mapping[key] = col
     return mapping
 
 def standardize(df, mapping, tz_str, resample_min=1):
-    rename_map = {v: k for k, v in mapping.items() if v in df.columns}
-    df = df.rename(columns=rename_map)
-    if 'time' not in df.columns:
+    time_col = mapping.get('time')
+    if not time_col or time_col not in df.columns:
         raise KeyError("Missing 'time' column after mapping")
+    rename_map = {time_col: 'time'}
+    for key in ['tws', 'twd', 'gust']:
+        col = mapping.get(key)
+        if col and col in df.columns and col != time_col:
+            rename_map[col] = key
+    df = df.rename(columns=rename_map)
     dt = pd.to_datetime(df['time'], errors='coerce')
+    if dt.isna().all():
+        raise ValueError("Unable to parse 'time' column")
     dt = dt.dt.tz_localize(tz_str, nonexistent='shift_forward', ambiguous='NaT')
     df.index = dt
     cols = [c for c in ['tws', 'twd', 'gust'] if c in df.columns]
