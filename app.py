@@ -216,16 +216,21 @@ with resumen_tab:
     ds_name = st.selectbox('Dataset', ds_names)
     df = st.session_state.datasets[ds_name]
     st.write(f"Intervalo: {df.index[0]} - {df.index[-1]} ({len(df)} muestras) TZ: {st.session_state.meta[ds_name]['tz']}")
-    col1,col2,col3 = st.columns(3)
-    col1.metric('TWS̄', f"{df['tws'].mean():.2f} m/s")
-    col2.metric('TWD̄', f"{circular_mean_deg(df['twd'], len(df)).iloc[-1]:.1f}°")
+    col1, col2, col3 = st.columns(3)
+    if 'tws' in df:
+        col1.metric('TWS̄', f"{df['tws'].mean():.2f} m/s")
+    if 'twd' in df:
+        col2.metric('TWD̄', f"{circular_mean_deg(df['twd'], len(df)).iloc[-1]:.1f}°")
     if 'gust' in df:
         col3.metric('GUST̄', f"{df['gust'].mean():.2f} m/s")
-    phase = find_mature_phase(df, umb_tws, sector)
-    if phase:
-        st.success(f"Fase madura: {phase[0]} a {phase[1]} ({(phase[1]-phase[0]).total_seconds()/60:.1f} min)")
+    if 'tws' in df and 'twd' in df:
+        phase = find_mature_phase(df, umb_tws, sector)
+        if phase:
+            st.success(f"Fase madura: {phase[0]} a {phase[1]} ({(phase[1]-phase[0]).total_seconds()/60:.1f} min)")
+        else:
+            st.info("No se detectó fase madura")
     else:
-        st.info("No se detectó fase madura")
+        st.warning("Faltan columnas 'tws' o 'twd' para analizar la fase madura")
     if st.button('Exportar resumen'):
         buf = io.StringIO()
         df.describe().to_csv(buf)
@@ -238,23 +243,25 @@ with tiempo_tab:
     df = st.session_state.datasets[ds_name]
     detrend_win_min = st.number_input('Ventana detrend', 5, 180, detrend_win, key='dt_win')
     show_resid = st.checkbox('Mostrar residuo', True)
-    if show_resid:
+    if show_resid and 'tws' in df and 'twd' in df:
         tws_res = detrend_rolling(df['tws'], detrend_win_min)
         twd_mean = circular_mean_deg(df['twd'], detrend_win_min)
         twd_res = angular_residual(df['twd'], twd_mean)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df['tws'], name='TWS'))
+    if 'tws' in df:
+        fig.add_trace(go.Scatter(x=df.index, y=df['tws'], name='TWS'))
     if 'gust' in df:
         fig.add_trace(go.Scatter(x=df.index, y=df['gust'], name='GUST', line=dict(dash='dot')))
-    if show_resid:
+    if show_resid and 'tws' in df:
         fig.add_trace(go.Scatter(x=df.index, y=tws_res, name='TWS′'))
     st.plotly_chart(fig, use_container_width=True)
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=df.index, y=df['twd'], name='TWD'))
-    if show_resid:
+    if 'twd' in df:
+        fig2.add_trace(go.Scatter(x=df.index, y=df['twd'], name='TWD'))
+    if show_resid and 'twd' in df:
         fig2.add_trace(go.Scatter(x=df.index, y=twd_res, name='TWD′'))
     st.plotly_chart(fig2, use_container_width=True)
-    if show_resid:
+    if show_resid and 'tws' in df and 'twd' in df:
         lags, r, lag_max, rmax = lag_correlation(tws_res.dropna().values, twd_res.dropna().values, 60)
         fig3 = go.Figure(go.Scatter(x=lags, y=r, mode='lines'))
         fig3.add_vline(x=lag_max, line_dash='dash', annotation_text=f"lag={lag_max} r={rmax:.2f}")
@@ -265,33 +272,37 @@ with espectral_tab:
     st.header('Espectral')
     ds_name = st.selectbox('Dataset', list(st.session_state.datasets.keys()), key='spec_ds')
     df = st.session_state.datasets[ds_name]
-    var = st.selectbox('Variable', ['tws','twd','gust'] if 'gust' in df else ['tws','twd'])
-    detrend_win_min = st.number_input('Ventana detrend', 5, 180, detrend_win, key='spec_win')
-    if var == 'twd':
-        data = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win_min))
+    options = [c for c in ['tws', 'twd', 'gust'] if c in df]
+    if not options:
+        st.warning('Dataset sin variables de viento disponibles')
     else:
-        data = detrend_rolling(df[var], detrend_win_min)
-    nperseg = st.number_input('nperseg', 32, 512, 160)
-    fs = 1/60
-    f, Pxx = compute_psd_cached(data.dropna().values, fs, nperseg, nperseg//2)
-    mask = f > 0
-    period = 1/f[mask]/60
-    fig = go.Figure(go.Scatter(x=period, y=Pxx[mask]))
-    fig.update_xaxes(title='Periodo (min)')
-    fig.update_yaxes(type='log')
-    st.plotly_chart(fig, use_container_width=True)
-    if 'tws' in df and 'twd' in df:
-        tws_res = detrend_rolling(df['tws'], detrend_win_min)
-        twd_res = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win_min))
-        f_c, Cxy, phase = compute_coh_cached(tws_res.dropna().values, twd_res.dropna().values, fs, nperseg, nperseg//2)
-        mask_c = f_c > 0
-        per_c = 1/f_c[mask_c]/60
-        figc = go.Figure(go.Scatter(x=per_c, y=Cxy[mask_c]))
-        figc.update_xaxes(title='Periodo (min)')
-        figc.update_yaxes(title='Coherencia')
-        st.plotly_chart(figc, use_container_width=True)
-        peaks = find_char_periods(period, Pxx[mask], per_c, Cxy[mask_c])
-        st.write('Periodos característicos:', peaks)
+        var = st.selectbox('Variable', options)
+        detrend_win_min = st.number_input('Ventana detrend', 5, 180, detrend_win, key='spec_win')
+        if var == 'twd':
+            data = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win_min))
+        else:
+            data = detrend_rolling(df[var], detrend_win_min)
+        nperseg = st.number_input('nperseg', 32, 512, 160)
+        fs = 1/60
+        f, Pxx = compute_psd_cached(data.dropna().values, fs, nperseg, nperseg//2)
+        mask = f > 0
+        period = 1/f[mask]/60
+        fig = go.Figure(go.Scatter(x=period, y=Pxx[mask]))
+        fig.update_xaxes(title='Periodo (min)')
+        fig.update_yaxes(type='log')
+        st.plotly_chart(fig, use_container_width=True)
+        if 'tws' in df and 'twd' in df:
+            tws_res = detrend_rolling(df['tws'], detrend_win_min)
+            twd_res = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win_min))
+            f_c, Cxy, phase = compute_coh_cached(tws_res.dropna().values, twd_res.dropna().values, fs, nperseg, nperseg//2)
+            mask_c = f_c > 0
+            per_c = 1/f_c[mask_c]/60
+            figc = go.Figure(go.Scatter(x=per_c, y=Cxy[mask_c]))
+            figc.update_xaxes(title='Periodo (min)')
+            figc.update_yaxes(title='Coherencia')
+            st.plotly_chart(figc, use_container_width=True)
+            peaks = find_char_periods(period, Pxx[mask], per_c, Cxy[mask_c])
+            st.write('Periodos característicos:', peaks)
 
 # Estadística Tab
 with estad_tab:
@@ -299,17 +310,20 @@ with estad_tab:
     ds_name = st.selectbox('Dataset', list(st.session_state.datasets.keys()), key='wave_ds')
     df = st.session_state.datasets[ds_name]
     detrend_win_min = st.number_input('Ventana detrend', 5, 180, detrend_win, key='wave_win')
-    tws_res = detrend_rolling(df['tws'], detrend_win_min).fillna(0)
-    widths = np.arange(6, 121)
-    cwtmat, freqs = pywt.cwt(tws_res.values, widths, 'morl', sampling_period=60)
-    power = np.abs(cwtmat)**2
-    fig = px.imshow(power, aspect='auto', x=df.index, y=widths, origin='lower')
-    fig.update_yaxes(title='Periodo (min)')
-    st.plotly_chart(fig, use_container_width=True)
-    band = st.slider('Banda (min)', 10, 120, (10,35))
-    mask = (widths >= band[0]) & (widths <= band[1])
-    amp = np.percentile(power[mask], [50,95])
-    st.write({'p50': amp[0], 'p95': amp[1]})
+    if 'tws' in df:
+        tws_res = detrend_rolling(df['tws'], detrend_win_min).fillna(0)
+        widths = np.arange(6, 121)
+        cwtmat, freqs = pywt.cwt(tws_res.values, widths, 'morl', sampling_period=60)
+        power = np.abs(cwtmat)**2
+        fig = px.imshow(power, aspect='auto', x=df.index, y=widths, origin='lower')
+        fig.update_yaxes(title='Periodo (min)')
+        st.plotly_chart(fig, use_container_width=True)
+        band = st.slider('Banda (min)', 10, 120, (10,35))
+        mask = (widths >= band[0]) & (widths <= band[1])
+        amp = np.percentile(power[mask], [50,95])
+        st.write({'p50': amp[0], 'p95': amp[1]})
+    else:
+        st.warning("El dataset no contiene 'tws' para análisis wavelet")
 
 # Comparativa Tab
 with comp_tab:
@@ -318,6 +332,9 @@ with comp_tab:
     rows = []
     for name in sel:
         df = st.session_state.datasets[name]
+        if 'tws' not in df or 'twd' not in df:
+            st.warning(f"{name} sin columnas 'tws' o 'twd'")
+            continue
         tws_res = detrend_rolling(df['tws'], detrend_win)
         twd_res = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win))
         f, Pxx = welch_psd(tws_res.dropna().values, 1/60, 160, 80)
@@ -325,14 +342,17 @@ with comp_tab:
         per = 1/f[mask]/60
         peaks = find_char_periods(per, Pxx[mask])
         lags, r, lag_max, rmax = lag_correlation(tws_res.dropna().values, twd_res.dropna().values, 60)
-        rows.append({'dataset':name, 'tws_mean':df['tws'].mean(), 'twd_mean':circular_mean_deg(df['twd'], len(df)).iloc[-1],
-                     'peaks':peaks, 'lag':lag_max, 'r':rmax})
-    st.dataframe(pd.DataFrame(rows))
-    if len(sel) >= 2:
-        X = []
-        for r in rows:
-            peak = r['peaks'][0] if r['peaks'] else np.nan
-            X.append([r['tws_mean'], peak, r['r']])
-            
-        km = KMeans(n_clusters=2, n_init='auto').fit(np.nan_to_num(X))
-        st.write('Clusters:', km.labels_)
+        rows.append({'dataset': name, 'tws_mean': df['tws'].mean(),
+                     'twd_mean': circular_mean_deg(df['twd'], len(df)).iloc[-1],
+                     'peaks': peaks, 'lag': lag_max, 'r': rmax})
+    if rows:
+        st.dataframe(pd.DataFrame(rows))
+        if len(rows) >= 2:
+            X = []
+            for r in rows:
+                peak = r['peaks'][0] if r['peaks'] else np.nan
+                X.append([r['tws_mean'], peak, r['r']])
+            km = KMeans(n_clusters=2, n_init='auto').fit(np.nan_to_num(X))
+            st.write('Clusters:', km.labels_)
+    else:
+        st.info('Sin datasets válidos para comparar')
