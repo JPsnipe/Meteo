@@ -13,27 +13,36 @@ from sklearn.cluster import KMeans
 # Utility functions
 # ---------------------------------------------
 COL_PATTERNS = {
-    'time': r'(?i)^(fecha|fechahora|datetime|time|timestamp)$',
-    'tws': r'(?i)^(velocidad\s*media|tws|vel|speed)$',
-    'twd': r'(?i)^(dir|twd|direction)$',
-    'gust': r'(?i)^(velocidad\s*max|gust|racha)$'
+    'time': r'^(fecha|fechahora|datetime|time|timestamp)$',
+    'tws': r'^(velocidadmedia|tws|vel|speed)$',
+    'twd': r'^(dir|twd|direction)$',
+    'gust': r'^(velocidadmax|gust|racha)$'
 }
 
 def load_file(file, sep, decimal):
     if file.name.lower().endswith('.xlsx'):
-        return pd.read_excel(file, decimal=decimal)
-    return pd.read_csv(file, sep=sep, decimal=decimal)
+
+        df = pd.read_excel(file, decimal=decimal)
+    else:
+        df = pd.read_csv(file, sep=sep, decimal=decimal)
+    df.columns = df.columns.str.strip()
+    return df
+
 
 def detect_columns(df):
     mapping = {}
     for col in df.columns:
+        norm = re.sub(r'[^a-z0-9]', '', col.lower())
         for key, pat in COL_PATTERNS.items():
-            if re.match(pat, col):
+            if re.match(pat, norm):
                 mapping[key] = col
     return mapping
 
 def standardize(df, mapping, tz_str, resample_min=1):
-    df = df.rename(columns={v: k for k, v in mapping.items()})
+    rename_map = {v: k for k, v in mapping.items() if v in df.columns}
+    df = df.rename(columns=rename_map)
+    if 'time' not in df.columns:
+        raise KeyError("Missing 'time' column after mapping")
     dt = pd.to_datetime(df['time'], errors='coerce')
     dt = dt.dt.tz_localize(tz_str, nonexistent='shift_forward', ambiguous='NaT')
     df.index = dt
