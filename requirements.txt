@@ -5,3 +5,4 @@ plotly==6.3.0
 scipy==1.16.1
 PyWavelets==1.9.0
 scikit-learn==1.7.1
+openpyxl==3.1.5
