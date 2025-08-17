@@ -243,6 +243,7 @@ with tiempo_tab:
     df = st.session_state.datasets[ds_name]
     detrend_win_min = st.number_input('Ventana detrend', 5, 180, detrend_win, key='dt_win')
     show_resid = st.checkbox('Mostrar residuo', True)
+
     tws_res = twd_res = None
     if show_resid:
         if 'tws' in df:
@@ -250,21 +251,27 @@ with tiempo_tab:
         if 'twd' in df:
             twd_mean = circular_mean_deg(df['twd'], detrend_win_min)
             twd_res = angular_residual(df['twd'], twd_mean)
+
     fig = go.Figure()
     if 'tws' in df:
         fig.add_trace(go.Scatter(x=df.index, y=df['tws'], name='TWS'))
     if 'gust' in df:
         fig.add_trace(go.Scatter(x=df.index, y=df['gust'], name='GUST', line=dict(dash='dot')))
+
     if show_resid and tws_res is not None:
+
+
         fig.add_trace(go.Scatter(x=df.index, y=tws_res, name='TWS′'))
     st.plotly_chart(fig, use_container_width=True)
     fig2 = go.Figure()
     if 'twd' in df:
         fig2.add_trace(go.Scatter(x=df.index, y=df['twd'], name='TWD'))
+
     if show_resid and twd_res is not None:
         fig2.add_trace(go.Scatter(x=df.index, y=twd_res, name='TWD′'))
     st.plotly_chart(fig2, use_container_width=True)
     if show_resid and tws_res is not None and twd_res is not None:
+
         lags, r, lag_max, rmax = lag_correlation(tws_res.dropna().values, twd_res.dropna().values, 60)
         fig3 = go.Figure(go.Scatter(x=lags, y=r, mode='lines'))
         fig3.add_vline(x=lag_max, line_dash='dash', annotation_text=f"lag={lag_max} r={rmax:.2f}")
