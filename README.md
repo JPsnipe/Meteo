@@ -8,4 +8,4 @@ Aplicación Streamlit para análisis de viento de regatas.
 streamlit run app.py
 ```
 
-Sube uno o varios ficheros CSV con columnas de tiempo, velocidad y dirección de viento para explorar los diferentes análisis.
+Sube uno o varios ficheros CSV o XLSX con columnas de tiempo, velocidad y dirección de viento para explorar los diferentes análisis.
