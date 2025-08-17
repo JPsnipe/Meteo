@@ -8,3 +8,5 @@ This repository maintains a log of tasks performed by AI agents.
 
 ## History
 - Initial setup: added `requirements.txt` and `AGENTS.md`.
+- Allow XLSX file uploads and added `openpyxl` dependency.
+- Improve column detection and validation to handle missing `time` fields.
