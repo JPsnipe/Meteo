@@ -1,0 +1,10 @@
+# AGENTS Instructions
+
+This repository maintains a log of tasks performed by AI agents.
+
+## Conventions
+- Document each task under the History section.
+- Run `python -m py_compile app.py` before committing to verify syntax.
+
+## History
+- Initial setup: added `requirements.txt` and `AGENTS.md`.
