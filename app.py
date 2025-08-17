@@ -205,7 +205,7 @@ with resumen_tab:
     st.write(f"Intervalo: {df.index[0]} - {df.index[-1]} ({len(df)} muestras) TZ: {st.session_state.meta[ds_name]['tz']}")
     col1,col2,col3 = st.columns(3)
     col1.metric('TWS̄', f"{df['tws'].mean():.2f} m/s")
-    col2.metric('TWD̄', f"{circular_mean_deg(df['twd'], len(df))[-1]:.1f}°")
+    col2.metric('TWD̄', f"{circular_mean_deg(df['twd'], len(df)).iloc[-1]:.1f}°")
     if 'gust' in df:
         col3.metric('GUST̄', f"{df['gust'].mean():.2f} m/s")
     phase = find_mature_phase(df, umb_tws, sector)
@@ -261,8 +261,9 @@ with espectral_tab:
     nperseg = st.number_input('nperseg', 32, 512, 160)
     fs = 1/60
     f, Pxx = compute_psd_cached(data.dropna().values, fs, nperseg, nperseg//2)
-    period = 1/f/60
-    fig = go.Figure(go.Scatter(x=period, y=Pxx))
+    mask = f > 0
+    period = 1/f[mask]/60
+    fig = go.Figure(go.Scatter(x=period, y=Pxx[mask]))
     fig.update_xaxes(title='Periodo (min)')
     fig.update_yaxes(type='log')
     st.plotly_chart(fig, use_container_width=True)
@@ -270,12 +271,13 @@ with espectral_tab:
         tws_res = detrend_rolling(df['tws'], detrend_win_min)
         twd_res = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win_min))
         f_c, Cxy, phase = compute_coh_cached(tws_res.dropna().values, twd_res.dropna().values, fs, nperseg, nperseg//2)
-        per_c = 1/f_c/60
-        figc = go.Figure(go.Scatter(x=per_c, y=Cxy))
+        mask_c = f_c > 0
+        per_c = 1/f_c[mask_c]/60
+        figc = go.Figure(go.Scatter(x=per_c, y=Cxy[mask_c]))
         figc.update_xaxes(title='Periodo (min)')
         figc.update_yaxes(title='Coherencia')
         st.plotly_chart(figc, use_container_width=True)
-        peaks = find_char_periods(period, Pxx, per_c, Cxy)
+        peaks = find_char_periods(period, Pxx[mask], per_c, Cxy[mask_c])
         st.write('Periodos característicos:', peaks)
 
 # Estadística Tab
@@ -306,10 +308,11 @@ with comp_tab:
         tws_res = detrend_rolling(df['tws'], detrend_win)
         twd_res = angular_residual(df['twd'], circular_mean_deg(df['twd'], detrend_win))
         f, Pxx = welch_psd(tws_res.dropna().values, 1/60, 160, 80)
-        per = 1/f/60
-        peaks = find_char_periods(per, Pxx)
+        mask = f > 0
+        per = 1/f[mask]/60
+        peaks = find_char_periods(per, Pxx[mask])
         lags, r, lag_max, rmax = lag_correlation(tws_res.dropna().values, twd_res.dropna().values, 60)
-        rows.append({'dataset':name, 'tws_mean':df['tws'].mean(), 'twd_mean':circular_mean_deg(df['twd'], len(df))[-1],
+        rows.append({'dataset':name, 'tws_mean':df['tws'].mean(), 'twd_mean':circular_mean_deg(df['twd'], len(df)).iloc[-1],
                      'peaks':peaks, 'lag':lag_max, 'r':rmax})
     st.dataframe(pd.DataFrame(rows))
     if len(sel) >= 2:
