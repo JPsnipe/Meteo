@@ -16,5 +16,6 @@ This repository maintains a log of tasks performed by AI agents.
 - Harden column mapping by normalizing headers and validating the time field.
 
 - Guard analyses against missing wind columns.
+- Decouple direction residuals from wind speed and handle absent columns gracefully.
 
 
