@@ -21,11 +21,13 @@ COL_PATTERNS = {
 
 def load_file(file, sep, decimal):
     if file.name.lower().endswith('.xlsx'):
+
         df = pd.read_excel(file, decimal=decimal)
     else:
         df = pd.read_csv(file, sep=sep, decimal=decimal)
     df.columns = df.columns.str.strip()
     return df
+
 
 def detect_columns(df):
     mapping = {}
