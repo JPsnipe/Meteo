@@ -19,7 +19,9 @@ COL_PATTERNS = {
     'gust': r'(?i)^(velocidad\s*max|gust|racha)$'
 }
 
-def load_csv(file, sep, decimal):
+def load_file(file, sep, decimal):
+    if file.name.lower().endswith('.xlsx'):
+        return pd.read_excel(file, decimal=decimal)
     return pd.read_csv(file, sep=sep, decimal=decimal)
 
 def detect_columns(df):
@@ -154,7 +156,7 @@ if 'datasets' not in st.session_state:
 
 sidebar = st.sidebar
 sidebar.header("Carga de datos")
-files = sidebar.file_uploader("Arrastra CSV(s)", type=['csv'], accept_multiple_files=True)
+files = sidebar.file_uploader("Arrastra CSV/XLSX", type=['csv', 'xlsx'], accept_multiple_files=True)
 sep = sidebar.text_input('Separador', value=';')
 decimal = sidebar.text_input('Decimal', value=',')
 tz_str = sidebar.text_input('Zona horaria', value='Europe/Madrid')
@@ -162,7 +164,7 @@ resample_min = sidebar.number_input('Resample (min)', 1, 60, 1)
 
 if files:
     for f in files:
-        df = load_csv(f, sep, decimal)
+        df = load_file(f, sep, decimal)
         mapping = detect_columns(df)
         with sidebar.expander(f"Mapeo columnas {f.name}"):
             for key in ['time','tws','twd','gust']:
