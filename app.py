@@ -245,12 +245,13 @@ with tiempo_tab:
     show_resid = st.checkbox('Mostrar residuo', True)
 
     tws_res = twd_res = None
-    if show_resid and 'tws' in df:
+    if show_resid:
+        if 'tws' in df:
+            tws_res = detrend_rolling(df['tws'], detrend_win_min)
+        if 'twd' in df:
+            twd_mean = circular_mean_deg(df['twd'], detrend_win_min)
+            twd_res = angular_residual(df['twd'], twd_mean)
 
-        tws_res = detrend_rolling(df['tws'], detrend_win_min)
-    if show_resid and 'twd' in df:
-        twd_mean = circular_mean_deg(df['twd'], detrend_win_min)
-        twd_res = angular_residual(df['twd'], twd_mean)
     fig = go.Figure()
     if 'tws' in df:
         fig.add_trace(go.Scatter(x=df.index, y=df['tws'], name='TWS'))
@@ -258,7 +259,7 @@ with tiempo_tab:
         fig.add_trace(go.Scatter(x=df.index, y=df['gust'], name='GUST', line=dict(dash='dot')))
 
     if show_resid and tws_res is not None:
-=======
+
 
         fig.add_trace(go.Scatter(x=df.index, y=tws_res, name='TWS′'))
     st.plotly_chart(fig, use_container_width=True)
